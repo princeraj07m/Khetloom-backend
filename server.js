@@ -23,17 +23,55 @@ app.use(helmet());
 app.use(compression());
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
-// CORS: universally permissive (no origin restriction, no credentials)
+// CORS: Allow specific origins for production
+const allowedOrigins = [
+  'http://localhost:4200',  // Local development
+  'http://localhost:3000',  // Alternative local port
+  'https://khetloom-pkes.vercel.app',  // Vercel production
+  'https://khetloom-pkes.vercel.app/', // Vercel production with trailing slash
+  'http://13.60.157.181:5001',  // Backend itself
+  'http://13.60.157.181'  // Backend without port
+];
+
 app.use(cors({
-  origin: (origin, callback) => callback(null, true),
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      return callback(null, true);
+    }
+    
+    // For development, allow any localhost
+    if (origin && origin.includes('localhost')) {
+      return callback(null, true);
+    }
+    
+    // Allow Vercel domains (with wildcard for subdomains)
+    if (origin && origin.includes('vercel.app')) {
+      return callback(null, true);
+    }
+    
+    // Log blocked origins for debugging
+    console.log('CORS blocked origin:', origin);
+    return callback(new Error('Not allowed by CORS'));
+  },
   credentials: false,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
+  exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar']
 }));
 
 
-// Handle preflight requests
-app.options('*', cors());
+// Handle preflight requests with explicit headers
+app.options('*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With');
+  res.header('Access-Control-Max-Age', '86400'); // 24 hours
+  res.sendStatus(200);
+});
 
 // Rate limiter for API
 const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 1000 });
