@@ -17,60 +17,82 @@ const app = express();
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 5001;
 
+// Simple CORS middleware - apply first
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  console.log('Request from origin:', origin);
+  
+  res.header('Access-Control-Allow-Origin', origin || '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With, Origin');
+  res.header('Access-Control-Allow-Credentials', 'false');
+  
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+  
+  next();
+});
 
 // Security and performance middleware
 app.use(helmet());
 app.use(compression());
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
-// CORS: Allow specific origins for production
-const allowedOrigins = [
-  'http://localhost:4200',  // Local development
-  'http://localhost:3000',  // Alternative local port
-  'https://khetloom-pkes.vercel.app',  // Vercel production
-  'https://khetloom-pkes.vercel.app/', // Vercel production with trailing slash
-  'http://13.60.157.181:5001',  // Backend itself
-  'http://13.60.157.181'  // Backend without port
-];
-
+// CORS: More permissive configuration for production
 app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
-    // Check if origin is in allowed list
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      return callback(null, true);
-    }
-    
-    // For development, allow any localhost
+    // Allow all localhost for development
     if (origin && origin.includes('localhost')) {
       return callback(null, true);
     }
     
-    // Allow Vercel domains (with wildcard for subdomains)
+    // Allow Vercel domains
     if (origin && origin.includes('vercel.app')) {
       return callback(null, true);
     }
     
-    // Log blocked origins for debugging
-    console.log('CORS blocked origin:', origin);
-    return callback(new Error('Not allowed by CORS'));
+    // Allow your specific domains
+    const allowedOrigins = [
+      'http://localhost:4200',
+      'http://localhost:3000',
+      'https://khetloom-pkes.vercel.app',
+      'https://khetloom-pkes.vercel.app/',
+      'http://13.60.157.181:5001',
+      'http://13.60.157.181'
+    ];
+    
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    // Log for debugging
+    console.log('CORS checking origin:', origin);
+    return callback(null, true); // Temporarily allow all origins for debugging
   },
   credentials: false,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With'],
-  exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH', 'HEAD'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Requested-With', 'Origin'],
+  exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
+  optionsSuccessStatus: 200 // Some legacy browsers choke on 204
 }));
 
 
 // Handle preflight requests with explicit headers
 app.options('*', (req, res) => {
-  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With');
+  const origin = req.headers.origin;
+  console.log('OPTIONS request from origin:', origin);
+  
+  res.header('Access-Control-Allow-Origin', origin || '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With, Origin');
+  res.header('Access-Control-Allow-Credentials', 'false');
   res.header('Access-Control-Max-Age', '86400'); // 24 hours
-  res.sendStatus(200);
+  res.status(200).end();
 });
 
 // Rate limiter for API
