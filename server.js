@@ -18,6 +18,8 @@ const PORT = process.env.PORT || 5001;
 
 // NO CORS RESTRICTIONS - Accessible from everywhere
 app.use((req, res, next) => {
+  console.log('🌐 Request received:', req.method, req.url, 'from origin:', req.headers.origin);
+  
   // Allow ALL origins
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', '*');
@@ -26,6 +28,7 @@ app.use((req, res, next) => {
   
   // Handle preflight requests
   if (req.method === 'OPTIONS') {
+    console.log('✅ Handling OPTIONS preflight request');
     res.status(200).end();
     return;
   }
