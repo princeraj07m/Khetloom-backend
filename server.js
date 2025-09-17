@@ -8,6 +8,9 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const authRoutes = require('./routes/authRoutes');
 const dataRoutes = require('./routes/dataRoutes');
+const cors = require('cors');
+const apiRoutes = require('./routes/api'); 
+
 
 // Load environment variables
 dotenv.config();
@@ -20,6 +23,9 @@ const PORT = process.env.PORT || 5001;
 app.use((req, res, next) => {
   console.log('🌐 Request received:', req.method, req.url, 'from origin:', req.headers.origin);
   
+  
+  app.use(cors());
+  app.use(express.json());
   // Allow ALL origins
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', '*');
@@ -56,6 +62,11 @@ app.use(express.json({ limit: '1mb' }));
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, env: process.env.NODE_ENV || 'development', time: new Date().toISOString() });
 });
+// Fertilizer Bot Health Check (from backend1)
+app.get('/api/fertilizer-health', (req, res) => {
+  res.json({ message: 'Fertilizer Bot Backend API is running!' });
+});
+app.use('/api', apiRoutes);   // backend1 API routes
 
 // Liveness/readiness/version
 app.get('/api/live', (_req, res) => res.status(200).send('OK'));
