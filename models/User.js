@@ -22,10 +22,7 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: function() {
-      // Only require password for new documents (not updates)
-      return this.isNew;
-    },
+    required: false, // Make password optional for updates
     minLength: [6, 'Password must be at least 6 characters']
   },
   phone: {
@@ -381,6 +378,7 @@ userSchema.pre('save', async function(next) {
     next(error);
   }
 });
+
 
 // Instance method to check password
 userSchema.methods.comparePassword = async function(candidatePassword) {

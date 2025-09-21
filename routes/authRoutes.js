@@ -34,6 +34,22 @@ router.post('/register', async (req, res) => {
       monthlyExpenditure
     } = req.body;
 
+    // Validate required fields
+    if (!fullName || !email || !password || !phone) {
+      return res.status(400).json({
+        success: false,
+        message: 'Full name, email, password, and phone are required'
+      });
+    }
+
+    // Validate password length
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 6 characters long'
+      });
+    }
+
     // Check if user already exists
     const existingUser = await User.findOne({ email: email.toLowerCase() });
     if (existingUser) {
@@ -235,11 +251,16 @@ router.put('/profile', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.userId;
     const updateData = req.body;
+    
+    console.log('Profile update request for user:', userId);
+    console.log('Update data received:', JSON.stringify(updateData, null, 2));
 
     // Remove password from update data if it's empty or not provided
     if (!updateData.password || updateData.password.trim() === '') {
       delete updateData.password;
     }
+    
+    console.log('Data after password removal:', JSON.stringify(updateData, null, 2));
 
     // Convert comma-separated strings to arrays for crops, devices, and machinery
     if (updateData.primaryCrops && typeof updateData.primaryCrops === 'string') {
@@ -370,11 +391,15 @@ router.put('/profile', authMiddleware, async (req, res) => {
       mergedData.integrations = updateData.integrations;
     }
 
-    // Find and update user
+    // Use findByIdAndUpdate with custom validation
     const user = await User.findByIdAndUpdate(
       userId,
       { $set: mergedData },
-      { new: true, runValidators: true }
+      { 
+        new: true, 
+        runValidators: true,
+        context: 'query' // This helps with validation context
+      }
     );
 
     if (!user) {
@@ -391,13 +416,22 @@ router.put('/profile', authMiddleware, async (req, res) => {
     });
 
   } catch (error) {
+    console.error('Profile update error:', error);
+    
     // Handle validation errors
     if (error.name === 'ValidationError') {
       const errors = Object.values(error.errors).map(err => err.message);
+      const errorDetails = Object.values(error.errors).map(err => ({
+        field: err.path,
+        message: err.message,
+        value: err.value
+      }));
+      console.error('Validation errors:', errors);
       return res.status(400).json({
         success: false,
         message: 'Validation failed',
-        errors
+        errors,
+        errorDetails
       });
     }
 
