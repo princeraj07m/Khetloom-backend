@@ -22,7 +22,10 @@ const userSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: [true, 'Password is required'],
+    required: function() {
+      // Only require password for new documents (not updates)
+      return this.isNew;
+    },
     minLength: [6, 'Password must be at least 6 characters']
   },
   phone: {
