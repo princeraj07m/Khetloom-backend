@@ -255,23 +255,125 @@ router.put('/profile', authMiddleware, async (req, res) => {
       updateData.machinery = updateData.machinery.split(',').map(machine => machine.trim()).filter(machine => machine);
     }
 
-    // Handle pesticides array
-    if (updateData.pesticides && typeof updateData.pesticides === 'string') {
-      updateData.pesticides = [{ name: updateData.pesticides, frequency: 'Monthly' }];
+    // Handle pesticides array - support both string and array formats
+    if (updateData.pesticides) {
+      if (typeof updateData.pesticides === 'string') {
+        updateData.pesticides = updateData.pesticides.split(',').map(p => ({ name: p.trim(), frequency: 'Monthly' })).filter(p => p.name);
+      } else if (Array.isArray(updateData.pesticides)) {
+        updateData.pesticides = updateData.pesticides.map(p => {
+          if (typeof p === 'string') {
+            return { name: p.trim(), frequency: 'Monthly' };
+          }
+          return p;
+        }).filter(p => p.name);
+      }
     }
 
     // Convert numeric fields
     if (updateData.farmSize) {
-      updateData.farmSize = parseInt(updateData.farmSize);
+      updateData.farmSize = parseFloat(updateData.farmSize);
     }
     if (updateData.monthlyExpenditure) {
-      updateData.monthlyExpenditure = parseInt(updateData.monthlyExpenditure);
+      updateData.monthlyExpenditure = parseFloat(updateData.monthlyExpenditure);
+    }
+
+    // Handle date fields
+    if (updateData.lastHarvest) {
+      updateData.lastHarvest = new Date(updateData.lastHarvest);
+    }
+    if (updateData.nextPlanting) {
+      updateData.nextPlanting = new Date(updateData.nextPlanting);
+    }
+    if (updateData.lastService) {
+      updateData.lastService = new Date(updateData.lastService);
+    }
+    if (updateData.nextService) {
+      updateData.nextService = new Date(updateData.nextService);
+    }
+    if (updateData.lastApplication) {
+      updateData.lastApplication = new Date(updateData.lastApplication);
+    }
+    if (updateData.nextApplication) {
+      updateData.nextApplication = new Date(updateData.nextApplication);
+    }
+    if (updateData.subscription?.renewsOn) {
+      updateData.subscription.renewsOn = new Date(updateData.subscription.renewsOn);
+    }
+    if (updateData.security?.passwordLastChanged) {
+      updateData.security.passwordLastChanged = new Date(updateData.security.passwordLastChanged);
+    }
+    if (updateData.security?.lastLogin) {
+      updateData.security.lastLogin = new Date(updateData.security.lastLogin);
+    }
+    if (updateData.systemSettings?.lastBackup) {
+      updateData.systemSettings.lastBackup = new Date(updateData.systemSettings.lastBackup);
+    }
+
+    // Handle nested objects - merge with existing data
+    const existingUser = await User.findById(userId);
+    if (!existingUser) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Merge nested objects to preserve existing data
+    const mergedData = { ...updateData };
+    
+    // Merge preferences
+    if (updateData.preferences) {
+      mergedData.preferences = {
+        ...existingUser.preferences,
+        ...updateData.preferences,
+        notifications: {
+          ...existingUser.preferences?.notifications,
+          ...updateData.preferences?.notifications
+        }
+      };
+    }
+
+    // Merge security settings
+    if (updateData.security) {
+      mergedData.security = {
+        ...existingUser.security,
+        ...updateData.security
+      };
+    }
+
+    // Merge subscription info
+    if (updateData.subscription) {
+      mergedData.subscription = {
+        ...existingUser.subscription,
+        ...updateData.subscription
+      };
+    }
+
+    // Merge payment details
+    if (updateData.paymentDetails) {
+      mergedData.paymentDetails = {
+        ...existingUser.paymentDetails,
+        ...updateData.paymentDetails
+      };
+    }
+
+    // Merge system settings
+    if (updateData.systemSettings) {
+      mergedData.systemSettings = {
+        ...existingUser.systemSettings,
+        ...updateData.systemSettings
+      };
+    }
+
+    // Handle integrations - replace array if provided
+    if (updateData.integrations) {
+      mergedData.integrations = updateData.integrations;
     }
 
     // Find and update user
     const user = await User.findByIdAndUpdate(
       userId,
-      { $set: updateData },
+      { $set: mergedData },
       { new: true, runValidators: true }
     );
 
@@ -311,6 +413,265 @@ router.put('/profile', authMiddleware, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Internal server error during profile update'
+    });
+  }
+});
+
+// Update specific profile sections
+router.put('/profile/subscription', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const subscriptionData = req.body;
+
+    // Handle date conversion
+    if (subscriptionData.renewsOn) {
+      subscriptionData.renewsOn = new Date(subscriptionData.renewsOn);
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { 
+        $set: { 
+          subscription: subscriptionData,
+          updatedAt: new Date()
+        } 
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Subscription updated successfully',
+      subscription: user.subscription
+    });
+
+  } catch (error) {
+    console.error('Subscription update error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error during subscription update'
+    });
+  }
+});
+
+router.put('/profile/preferences', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const preferencesData = req.body;
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { 
+        $set: { 
+          preferences: preferencesData,
+          updatedAt: new Date()
+        } 
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Preferences updated successfully',
+      preferences: user.preferences
+    });
+
+  } catch (error) {
+    console.error('Preferences update error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error during preferences update'
+    });
+  }
+});
+
+router.put('/profile/security', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const securityData = req.body;
+
+    // Handle date conversions
+    if (securityData.passwordLastChanged) {
+      securityData.passwordLastChanged = new Date(securityData.passwordLastChanged);
+    }
+    if (securityData.lastLogin) {
+      securityData.lastLogin = new Date(securityData.lastLogin);
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { 
+        $set: { 
+          security: securityData,
+          updatedAt: new Date()
+        } 
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Security settings updated successfully',
+      security: user.security
+    });
+
+  } catch (error) {
+    console.error('Security update error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error during security update'
+    });
+  }
+});
+
+router.put('/profile/payment', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const paymentData = req.body;
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { 
+        $set: { 
+          paymentDetails: paymentData,
+          updatedAt: new Date()
+        } 
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Payment details updated successfully',
+      paymentDetails: user.paymentDetails
+    });
+
+  } catch (error) {
+    console.error('Payment update error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error during payment update'
+    });
+  }
+});
+
+router.put('/profile/integrations', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const integrationsData = req.body;
+
+    // Handle date conversions for lastSync
+    if (Array.isArray(integrationsData)) {
+      integrationsData.forEach(integration => {
+        if (integration.lastSync) {
+          integration.lastSync = new Date(integration.lastSync);
+        }
+      });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { 
+        $set: { 
+          integrations: integrationsData,
+          updatedAt: new Date()
+        } 
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Integrations updated successfully',
+      integrations: user.integrations
+    });
+
+  } catch (error) {
+    console.error('Integrations update error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error during integrations update'
+    });
+  }
+});
+
+// Image upload endpoint
+router.post('/profile/image', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { imageUrl } = req.body;
+
+    if (!imageUrl) {
+      return res.status(400).json({
+        success: false,
+        message: 'Image URL is required'
+      });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { 
+        $set: { 
+          profileImage: imageUrl,
+          updatedAt: new Date()
+        } 
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Profile image updated successfully',
+      profileImage: user.profileImage
+    });
+
+  } catch (error) {
+    console.error('Image update error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error during image update'
     });
   }
 });
